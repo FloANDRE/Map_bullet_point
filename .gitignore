@@ -1,0 +1,11 @@
+node_modules
+addok
+addok_data
+addok_importer
+addok-data
+addok-standalone
+addok-importer
+addok-redis
+build-package
+docker-compose.yml
+logs
