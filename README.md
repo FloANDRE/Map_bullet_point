@@ -1,54 +1,88 @@
-# React + TypeScript + Vite
+# Carte Parcoursup - Visualisation des étudiants
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Ce projet permet de visualiser sur une carte interactive la répartition géographique des étudiants à partir d'un fichier Excel contenant leurs informations.
 
-Currently, two official plugins are available:
+## Prérequis
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js (version 18 ou supérieure)
+- Docker et Docker Compose
+- Un fichier Excel avec les colonnes suivantes :
+  - `étudiant` ou `etudiant` : nom de l'étudiant
+  - `ville` : ville de l'étudiant
 
-## Expanding the ESLint configuration
+## Installation
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+1. Cloner le repository :
+```bash
+git clone [URL_DU_REPO]
+cd Epitech_Map
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+2. Installer les dépendances :
+```bash
+npm install
 ```
+
+3. Lancer les services Docker (nécessaires pour le géocodage) :
+```bash
+docker-compose up -d
+```
+
+## Lancement
+
+1. Démarrer l'application en mode développement :
+```bash
+npm run dev
+```
+
+2. Ouvrir votre navigateur à l'adresse : `http://localhost:5173`
+
+## Utilisation
+
+1. Sur la page d'accueil, cliquez sur le bouton "Choisir un fichier" pour sélectionner votre fichier Excel
+2. Le système va automatiquement :
+   - Lire le fichier Excel
+   - Géocoder les villes des étudiants
+   - Afficher les points sur la carte
+3. Une barre de progression vous indique l'avancement du traitement
+4. Une fois terminé, vous verrez tous les étudiants placés sur la carte
+
+## Fonctionnalités
+
+- Visualisation interactive sur une carte Leaflet
+- Géocodage automatique des villes
+- Barre de progression pendant le traitement
+- Gestion des erreurs avec messages explicites
+- Interface responsive
+
+## Structure du projet
+
+```
+Epitech_Map/
+├── src/
+│   ├── components/
+│   │   └── LeafletMap.tsx    # Composant de la carte
+│   ├── App.tsx              # Composant principal
+│   └── main.tsx             # Point d'entrée
+├── public/                  # Fichiers statiques
+├── docker-compose.yml       # Configuration Docker
+└── vite.config.ts          # Configuration Vite
+```
+
+## Dépannage
+
+Si vous rencontrez des problèmes :
+
+1. Vérifiez que Docker est bien lancé
+2. Assurez-vous que le fichier Excel est au bon format
+3. Vérifiez que les noms de colonnes sont exactement "étudiant" (ou "etudiant") et "ville"
+4. Consultez la console du navigateur pour plus de détails sur les erreurs
+
+## Contribution
+
+Les contributions sont les bienvenues ! N'hésitez pas à :
+1. Fork le projet
+2. Créer une branche pour votre fonctionnalité
+3. Commiter vos changements
+4. Pousser vers la branche
+5. Ouvrir une Pull Request
