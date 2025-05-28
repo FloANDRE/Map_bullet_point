@@ -1,77 +1,110 @@
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { useEffect, useRef } from 'react';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Icon } from 'leaflet';
-import { useEffect } from 'react';
-
-interface Location {
-  name: string;
-  city: string;
-  latitude: number;
-  longitude: number;
-  display_name: string;
-}
+import type { Location } from '../types';
 
 interface LeafletMapProps {
   locations: Location[];
 }
 
 export const LeafletMap: React.FC<LeafletMapProps> = ({ locations }) => {
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.LayerGroup | null>(null);
+
   useEffect(() => {
-    // Correction pour les icônes Leaflet
-    delete (Icon.Default.prototype as any)._getIconUrl;
-    Icon.Default.mergeOptions({
-      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-    });
+    if (!mapRef.current) {
+      mapRef.current = L.map('map').setView([46.603354, 1.888334], 6);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(mapRef.current);
+      markersRef.current = L.layerGroup().addTo(mapRef.current);
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
   }, []);
 
-  // Vérifier si nous avons des locations valides
-  if (!locations || locations.length === 0) {
-    return (
-      <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        Aucun point à afficher
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!mapRef.current || !markersRef.current) return;
 
-  // Calculer le centre de la carte en fonction des points
-  const center = locations.length > 0
-    ? [
-        locations.reduce((sum, loc) => sum + loc.latitude, 0) / locations.length,
-        locations.reduce((sum, loc) => sum + loc.longitude, 0) / locations.length
-      ]
-    : [46.603354, 1.888334]; // Centre de la France par défaut
+    markersRef.current.clearLayers();
 
-  return (
-    <MapContainer
-      center={center as [number, number]}
-      zoom={6}
-      style={{ height: '100%', width: '100%' }}
-    >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      {locations.map((location, index) => (
-        <Marker
-          key={`${location.name}-${index}`}
-          position={[location.latitude, location.longitude]}
-        >
-          <Popup>
-            <div>
-              <h3>{location.name}</h3>
-              <p>Ville : {location.city}</p>
-              <p style={{ fontSize: '0.8em', color: '#666' }}>
-                {location.display_name}
-              </p>
-              <p style={{ fontSize: '0.8em', color: '#2196F3', marginTop: '5px' }}>
-                📍 GPS : {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-              </p>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
-  );
+    // Compter les occurrences de chaque ville
+    const cityCounts = locations.reduce((acc, location) => {
+      const key = `${location.latitude},${location.longitude}`;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Créer les marqueurs avec des couleurs différentes selon le nombre d'occurrences
+    locations.forEach(location => {
+      const key = `${location.latitude},${location.longitude}`;
+      const count = cityCounts[key];
+      
+      let color = '#3388ff'; // Bleu par défaut (1-5)
+      if (count > 10) {
+        color = '#ff0000'; // Rouge (>10)
+      } else if (count > 5) {
+        color = '#ffa500'; // Orange (6-10)
+      }
+
+      const marker = L.circleMarker([location.latitude, location.longitude], {
+        radius: 12,
+        fillColor: color,
+        color: '#fff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.8
+      });
+
+      // Ajouter le texte avec le nombre d'occurrences
+      const text = L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="
+          background-color: ${color};
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: bold;
+          color: white;
+          border: 2px solid white;
+          box-shadow: 0 0 4px rgba(0,0,0,0.3);
+        ">${count}</div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
+      const textMarker = L.marker([location.latitude, location.longitude], {
+        icon: text,
+        zIndexOffset: 1000
+      });
+
+      const popupContent = `
+        <div>
+          <strong>${location.name}</strong><br/>
+          ${location.display_name}<br/>
+          Nombre d'étudiants: ${count}
+        </div>
+      `;
+
+      marker.bindPopup(popupContent);
+      textMarker.bindPopup(popupContent);
+      
+      if (markersRef.current) {
+        markersRef.current.addLayer(marker);
+        markersRef.current.addLayer(textMarker);
+      }
+    });
+
+  }, [locations]);
+
+  return <div id="map" style={{ height: '100%', width: '100%' }} />;
 }; 

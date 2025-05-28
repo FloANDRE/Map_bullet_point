@@ -22,6 +22,8 @@ function App() {
   const [loadingProgress, setLoadingProgress] = useState<LoadingProgress>({ current: 0, total: 0, status: '' });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [failedCities, setFailedCities] = useState<{student: string, city: string}[]>([]);
+  const [showFailedCities, setShowFailedCities] = useState(false);
 
   const geocodeCity = async (city: string): Promise<{ lat: number; lon: number; display_name: string } | null> => {
     try {
@@ -89,6 +91,7 @@ function App() {
 
       const results: Location[] = [];
       let processedCount = 0;
+      const failedCitiesList: {student: string, city: string}[] = [];
 
       for (const row of jsonData) {
         const city = (row as any)['ville'];
@@ -104,6 +107,8 @@ function App() {
               longitude: geoResult.lon,
               display_name: geoResult.display_name
             });
+          } else {
+            failedCitiesList.push({ student, city });
           }
         }
 
@@ -123,7 +128,11 @@ function App() {
       }
 
       setLocations(results);
-      setSuccess(`${results.length} étudiants ont été placés sur la carte`);
+      setFailedCities(failedCitiesList);
+      if (failedCitiesList.length > 0) {
+        setShowFailedCities(true);
+      }
+      setSuccess(`${results.length} étudiants ont été placés sur la carte${failedCitiesList.length > 0 ? ` (${failedCitiesList.length} villes non trouvées)` : ''}`);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Une erreur est survenue');
     } finally {
@@ -180,11 +189,6 @@ function App() {
               </div>
               <div style={{ color: '#666' }}>
                 {loadingProgress.status}
-                {loadingProgress.total > 0 && (
-                  <span style={{ marginLeft: '0.5rem' }}>
-                    ({loadingProgress.current}/{loadingProgress.total})
-                  </span>
-                )}
               </div>
             </div>
           )}
@@ -215,6 +219,60 @@ function App() {
       <div style={{ flex: 1 }}>
         <LeafletMap locations={locations} />
       </div>
+      {showFailedCities && failedCities.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: 'white',
+          padding: '2rem',
+          borderRadius: '8px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+          zIndex: 1000,
+          maxWidth: '80%',
+          maxHeight: '80vh',
+          overflow: 'auto',
+          color: 'black'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ margin: 0, color: '#c62828' }}>Villes non trouvées</h2>
+            <button
+              onClick={() => setShowFailedCities(false)}
+              style={{
+                border: 'none',
+                background: 'none',
+                fontSize: '1.5rem',
+                cursor: 'pointer',
+                color: '#666'
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ marginBottom: '1rem', color: 'black' }}>
+            <p>Les villes suivantes n'ont pas pu être géocodées :</p>
+          </div>
+          <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #eee' }}>
+                  <th style={{ padding: '0.5rem', textAlign: 'left', color: 'black' }}>Étudiant</th>
+                  <th style={{ padding: '0.5rem', textAlign: 'left', color: 'black' }}>Ville</th>
+                </tr>
+              </thead>
+              <tbody>
+                {failedCities.map((item, index) => (
+                  <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '0.5rem', color: 'black' }}>{item.student}</td>
+                    <td style={{ padding: '0.5rem', color: 'black' }}>{item.city}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
