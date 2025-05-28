@@ -2,4 +2,4 @@ node_modules
 addok-data/addok.db
 addok-data/addok.db.zip
 addok-data/dump.rdb
-logs/
+logs/*
