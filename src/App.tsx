@@ -1,14 +1,7 @@
 import { useState } from 'react';
 import { LeafletMap } from './components/LeafletMap';
 import * as XLSX from 'xlsx';
-
-interface Location {
-  name: string;
-  city: string;
-  latitude: number;
-  longitude: number;
-  display_name: string;
-}
+import { Location } from './types';
 
 interface LoadingProgress {
   current: number;
@@ -64,76 +57,200 @@ function App() {
     }
   };
 
+  const createTempExcel = (data: any[]) => {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Données");
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    return new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  };
+
+  const processBatch = async (
+    batch: any[],
+    startIndex: number,
+    totalRows: number
+  ): Promise<{ results: Location[]; failed: {student: string, city: string}[] }> => {
+    const results: Location[] = [];
+    const failed: {student: string, city: string}[] = [];
+
+    for (const row of batch) {
+      const city = row['Ville'];
+      const lastName = row['Nom'];
+      const firstName = row['Prénom'];
+      const student = `${lastName} ${firstName}`;
+
+      if (city) {
+        console.log(`🔍 Géocodage de "${city}" pour ${student}`);
+        const geoResult = await geocodeCity(city);
+        if (geoResult) {
+          results.push({
+            name: student,
+            city: city,
+            latitude: geoResult.lat,
+            longitude: geoResult.lon,
+            display_name: geoResult.display_name
+          });
+          console.log(`✅ Géocodage réussi pour ${city}`);
+        } else {
+          failed.push({ student, city });
+          console.log(`❌ Échec du géocodage pour ${city}`);
+        }
+      }
+
+      setLoadingProgress({
+        current: startIndex + results.length + failed.length,
+        total: totalRows,
+        status: `Géocodage en cours... (${startIndex + results.length + failed.length}/${totalRows})`
+      });
+
+      // Petit délai entre chaque requête pour éviter de surcharger l'API
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    return { results, failed };
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     try {
+      console.time('Traitement total');
+      console.log('🚀 Début du traitement du fichier:', file.name);
       setLoading(true);
       setError(null);
       setSuccess(null);
+      setLocations([]);
+      setFailedCities([]);
 
+      console.time('Lecture du fichier');
       const data = await file.arrayBuffer();
+      console.timeEnd('Lecture du fichier');
+      console.log('📊 Lecture du fichier Excel terminée');
+
+      console.time('Conversion Excel');
       const workbook = XLSX.read(data);
+      console.log('📑 Workbook créé');
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      console.log('📄 Worksheet extrait');
+      
+      // Optimisation de la conversion en JSON
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+      const jsonData = [];
+      
+      // Lire uniquement les colonnes nécessaires
+      const requiredColumns = ['Candidat - Nom', 'Candidat - Prénom', 'Coordonnées - Libellé commune'];
+      const headerRow = {};
+      
+      // Trouver les indices des colonnes requises
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
+        if (cell && requiredColumns.includes(cell.v)) {
+          headerRow[C] = cell.v;
+        }
+      }
+      
+      // Lire les données ligne par ligne
+      for (let R = range.s.r + 1; R <= range.e.r; R++) {
+        const row: any = {};
+        let hasData = false;
+        
+        for (const [colIndex, headerName] of Object.entries(headerRow)) {
+          const cell = worksheet[XLSX.utils.encode_cell({ r: R, c: parseInt(colIndex) })];
+          if (cell) {
+            row[headerName] = cell.v;
+            hasData = true;
+          }
+        }
+        
+        if (hasData) {
+          jsonData.push(row);
+        }
+      }
+      
+      console.timeEnd('Conversion Excel');
 
       if (jsonData.length === 0) {
         throw new Error('Le fichier Excel est vide');
       }
 
+      console.log(`📝 Nombre total de lignes à traiter: ${jsonData.length}`);
+      console.log('Première ligne:', jsonData[0]);
+
       const firstRow = jsonData[0] as any;
-      if (!('Candidat - Nom' in firstRow) || !('Coordonnées - Libellé commune' in firstRow)) {
-        throw new Error('Le fichier doit contenir les colonnes "Candidat - Nom" et "Coordonnées - Libellé commune"');
+      if (!('Candidat - Nom' in firstRow) || !('Candidat - Prénom' in firstRow) || !('Coordonnées - Libellé commune' in firstRow)) {
+        throw new Error('Le fichier doit contenir les colonnes "Candidat - Nom", "Candidat - Prénom" et "Coordonnées - Libellé commune"');
       }
 
-      setLoadingProgress({ current: 0, total: jsonData.length, status: 'Géocodage des villes...' });
+      console.log('✅ Vérification des colonnes requises terminée');
 
-      const results: Location[] = [];
-      let processedCount = 0;
-      const failedCitiesList: {student: string, city: string}[] = [];
+      console.time('Extraction des données');
+      // Extraire les données nécessaires
+      const extractedData = jsonData.map((row: any) => ({
+        'Nom': row['Candidat - Nom'],
+        'Prénom': row['Candidat - Prénom'],
+        'Ville': row['Coordonnées - Libellé commune']
+      }));
+      console.timeEnd('Extraction des données');
+      console.log('📋 Extraction des données terminée');
 
-      for (const row of jsonData) {
-        const city = (row as any)['Coordonnées - Libellé commune'];
-        const student = (row as any)['Candidat - Nom'];
+      console.time('Création Excel temporaire');
+      // Créer le fichier Excel temporaire
+      const tempExcel = createTempExcel(extractedData);
+      console.timeEnd('Création Excel temporaire');
+      console.log('📄 Création du fichier Excel temporaire terminée');
+      
+      console.time('Lecture Excel temporaire');
+      // Lire le fichier temporaire pour le géocodage
+      const tempData = await tempExcel.arrayBuffer();
+      const tempWorkbook = XLSX.read(tempData);
+      const tempWorksheet = tempWorkbook.Sheets[tempWorkbook.SheetNames[0]];
+      const tempJsonData = XLSX.utils.sheet_to_json(tempWorksheet);
+      console.timeEnd('Lecture Excel temporaire');
 
-        if (city) {
-          const geoResult = await geocodeCity(city);
-          if (geoResult) {
-            results.push({
-              name: student,
-              city: city,
-              latitude: geoResult.lat,
-              longitude: geoResult.lon,
-              display_name: geoResult.display_name
-            });
-          } else {
-            failedCitiesList.push({ student, city });
-          }
-        }
+      setLoadingProgress({ current: 0, total: tempJsonData.length, status: 'Géocodage des villes...' });
 
-        processedCount++;
-        setLoadingProgress({
-          current: processedCount,
-          total: jsonData.length,
-          status: `Géocodage en cours... (${processedCount}/${jsonData.length})`
-        });
+      const BATCH_SIZE = 10; // Traiter 10 lignes à la fois
+      const allResults: Location[] = [];
+      const allFailed: {student: string, city: string}[] = [];
 
-        // Délai pour respecter les limites de l'API
-        await new Promise(resolve => setTimeout(resolve, 100));
+      console.log('🌍 Début du géocodage par lots de', BATCH_SIZE, 'lignes');
+
+      // Traiter les données par lots
+      for (let i = 0; i < tempJsonData.length; i += BATCH_SIZE) {
+        console.log(`\n📦 Traitement du lot ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(tempJsonData.length/BATCH_SIZE)}`);
+        const batch = tempJsonData.slice(i, i + BATCH_SIZE);
+        const { results, failed } = await processBatch(batch, i, tempJsonData.length);
+        
+        console.log(`✅ Lot traité: ${results.length} succès, ${failed.length} échecs`);
+        
+        allResults.push(...results);
+        allFailed.push(...failed);
+
+        // Mettre à jour l'état avec les nouveaux résultats
+        setLocations(prevLocations => [...prevLocations, ...results]);
+        setFailedCities(prevFailed => [...prevFailed, ...failed]);
+
+        // Délai entre les lots pour permettre à l'interface de rester réactive
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
-      if (results.length === 0) {
+      console.log('\n📊 Résumé final:');
+      console.log(`- Total des villes géocodées: ${allResults.length}`);
+      console.log(`- Total des échecs: ${allFailed.length}`);
+
+      if (allResults.length === 0) {
         throw new Error('Aucune ville n\'a pu être géocodée');
       }
 
-      setLocations(results);
-      setFailedCities(failedCitiesList);
-      if (failedCitiesList.length > 0) {
+      if (allFailed.length > 0) {
         setShowFailedCities(true);
       }
-      setSuccess(`${results.length} étudiants ont été placés sur la carte${failedCitiesList.length > 0 ? ` (${failedCitiesList.length} villes non trouvées)` : ''}`);
+      setSuccess(`${allResults.length} étudiants ont été placés sur la carte${allFailed.length > 0 ? ` (${allFailed.length} villes non trouvées)` : ''}`);
+      console.log('✨ Traitement terminé avec succès');
+      console.timeEnd('Traitement total');
     } catch (error) {
+      console.error('❌ Erreur lors du traitement:', error);
       setError(error instanceof Error ? error.message : 'Une erreur est survenue');
     } finally {
       setLoading(false);
@@ -161,6 +278,7 @@ function App() {
               backgroundColor: 'white'
             }}
           />
+
           {loading && (
             <div style={{ marginTop: '1rem' }}>
               <div style={{ 
@@ -193,6 +311,7 @@ function App() {
             </div>
           )}
         </div>
+
         {error && (
           <div style={{ 
             padding: '0.5rem', 
@@ -204,6 +323,7 @@ function App() {
             ❌ {error}
           </div>
         )}
+
         {success && (
           <div style={{ 
             padding: '0.5rem', 
@@ -216,9 +336,7 @@ function App() {
           </div>
         )}
       </div>
-      <div style={{ flex: 1 }}>
-        <LeafletMap locations={locations} />
-      </div>
+
       {showFailedCities && failedCities.length > 0 && (
         <div style={{
           position: 'fixed',
@@ -273,6 +391,10 @@ function App() {
           </div>
         </div>
       )}
+
+      <div style={{ flex: 1 }}>
+        <LeafletMap locations={locations} />
+      </div>
     </div>
   );
 }
