@@ -4,6 +4,7 @@ export interface Location {
   latitude: number;
   longitude: number;
   display_name: string;
+  highSchool: string;
   sortColumn1?: string;
   sortColumn2?: string;
 } 

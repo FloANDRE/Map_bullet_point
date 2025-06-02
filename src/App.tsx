@@ -1,12 +1,20 @@
 import { useState } from 'react';
 import { LeafletMap } from './components/LeafletMap';
 import * as XLSX from 'xlsx';
-import { Location } from './types';
+import type { Location } from './types';
 
 interface LoadingProgress {
   current: number;
   total: number;
   status: string;
+}
+
+interface HeaderRow {
+  [key: number]: string;
+}
+
+interface ExcelRow {
+  [key: string]: string;
 }
 
 function App() {
@@ -77,6 +85,7 @@ function App() {
       const city = row['Ville'];
       const lastName = row['Nom'];
       const firstName = row['Prénom'];
+      const highSchool = row['Lycée'] || 'déscolarisé';
       const student = `${lastName} ${firstName}`;
 
       if (city) {
@@ -88,7 +97,8 @@ function App() {
             city: city,
             latitude: geoResult.lat,
             longitude: geoResult.lon,
-            display_name: geoResult.display_name
+            display_name: geoResult.display_name,
+            highSchool: highSchool
           });
           console.log(`✅ Géocodage réussi pour ${city}`);
         } else {
@@ -139,8 +149,13 @@ function App() {
       const jsonData = [];
       
       // Lire uniquement les colonnes nécessaires
-      const requiredColumns = ['Candidat - Nom', 'Candidat - Prénom', 'Coordonnées - Libellé commune'];
-      const headerRow = {};
+      const requiredColumns = [
+        'Candidat - Nom',
+        'Candidat - Prénom',
+        'Coordonnées - Libellé commune',
+        'Nom Etablissement origine 2024/2025'
+      ];
+      const headerRow: HeaderRow = {};
       
       // Trouver les indices des colonnes requises
       for (let C = range.s.c; C <= range.e.c; C++) {
@@ -152,7 +167,7 @@ function App() {
       
       // Lire les données ligne par ligne
       for (let R = range.s.r + 1; R <= range.e.r; R++) {
-        const row: any = {};
+        const row: ExcelRow = {};
         let hasData = false;
         
         for (const [colIndex, headerName] of Object.entries(headerRow)) {
@@ -178,8 +193,11 @@ function App() {
       console.log('Première ligne:', jsonData[0]);
 
       const firstRow = jsonData[0] as any;
-      if (!('Candidat - Nom' in firstRow) || !('Candidat - Prénom' in firstRow) || !('Coordonnées - Libellé commune' in firstRow)) {
-        throw new Error('Le fichier doit contenir les colonnes "Candidat - Nom", "Candidat - Prénom" et "Coordonnées - Libellé commune"');
+      if (!('Candidat - Nom' in firstRow) || 
+          !('Candidat - Prénom' in firstRow) || 
+          !('Coordonnées - Libellé commune' in firstRow) ||
+          !('Nom Etablissement origine 2024/2025' in firstRow)) {
+        throw new Error('Le fichier doit contenir les colonnes "Candidat - Nom", "Candidat - Prénom", "Coordonnées - Libellé commune" et "Nom Etablissement origine 2024/2025"');
       }
 
       console.log('✅ Vérification des colonnes requises terminée');
@@ -189,7 +207,8 @@ function App() {
       const extractedData = jsonData.map((row: any) => ({
         'Nom': row['Candidat - Nom'],
         'Prénom': row['Candidat - Prénom'],
-        'Ville': row['Coordonnées - Libellé commune']
+        'Ville': row['Coordonnées - Libellé commune'],
+        'Lycée': row['Nom Etablissement origine 2024/2025']
       }));
       console.timeEnd('Extraction des données');
       console.log('📋 Extraction des données terminée');
