@@ -83,8 +83,8 @@ function App() {
       }
 
       const firstRow = jsonData[0] as any;
-      if (!('étudiant' in firstRow || 'etudiant' in firstRow) || !('ville' in firstRow)) {
-        throw new Error('Le fichier doit contenir les colonnes "étudiant" et "ville"');
+      if (!('Candidat - Nom' in firstRow) || !('Coordonnées - Libellé commune' in firstRow)) {
+        throw new Error('Le fichier doit contenir les colonnes "Candidat - Nom" et "Coordonnées - Libellé commune"');
       }
 
       setLoadingProgress({ current: 0, total: jsonData.length, status: 'Géocodage des villes...' });
@@ -94,8 +94,8 @@ function App() {
       const failedCitiesList: {student: string, city: string}[] = [];
 
       for (const row of jsonData) {
-        const city = (row as any)['ville'];
-        const student = (row as any)['étudiant'] || (row as any)['etudiant'];
+        const city = (row as any)['Coordonnées - Libellé commune'];
+        const student = (row as any)['Candidat - Nom'];
 
         if (city) {
           const geoResult = await geocodeCity(city);
