@@ -10,7 +10,6 @@ interface LeafletMapProps {
 export const LeafletMap: React.FC<LeafletMapProps> = ({ locations }) => {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
-  const [sortByHighSchool, setSortByHighSchool] = useState(false);
   const [selectedHighSchool, setSelectedHighSchool] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -123,22 +122,13 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ locations }) => {
         zIndexOffset: 1000
       });
 
-      // Trier les étudiants si nécessaire
-      const sortedStudents = sortByHighSchool 
-        ? [...filteredStudents].sort((a, b) => {
-            if (a.highSchool === 'déscolarisé') return 1;
-            if (b.highSchool === 'déscolarisé') return -1;
-            return a.highSchool.localeCompare(b.highSchool);
-          })
-        : filteredStudents;
-
       const popupContent = `
         <div>
           <strong>Ville : ${cityData.display_name}</strong><br/>
           <strong>Nombre d'étudiants : ${filteredStudents.length}</strong><br/>
           <br/>
           <strong>Liste des étudiants :</strong><br/>
-          ${sortedStudents.map(student => `
+          ${filteredStudents.map(student => `
             • ${student.name}<br/>
             &nbsp;&nbsp;&nbsp;&nbsp;${student.highSchool === 'déscolarisé' ? 'Déscolarisé' : `Lycée : ${student.highSchool}`}
           `).join('<br/>')}
@@ -154,7 +144,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ locations }) => {
       }
     });
 
-  }, [locations, sortByHighSchool, selectedHighSchool]);
+  }, [locations, selectedHighSchool]);
 
   return (
     <div style={{ position: 'relative', height: '100%', width: '100%' }}>

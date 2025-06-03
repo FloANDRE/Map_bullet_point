@@ -21,3 +21,17 @@ services:
     image: etalab/addok-redis
     volumes:
     - ./addok-data/dump.rdb:/data/dump.rdb
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    environment:
+      - VITE_API_URL=http://localhost:7878
+    depends_on:
+      - addok
